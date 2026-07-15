@@ -5,6 +5,9 @@
 
 #include "Json.h"
 #include "JsonStore.h"
+#include "OrderStore.h"
+#include "ProductionQueueStore.h"
+#include "SampleStore.h"
 #include "TimeUtil.h"
 
 TEST(SampleTest, BasicAssertion) {
@@ -145,6 +148,83 @@ TEST(TimeUtilTest, ReturnsSecondPrecisionFormattedTimestamp) {
 
     static const std::regex pattern(R"(^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$)");
     EXPECT_TRUE(std::regex_match(timestamp, pattern)) << "got: " << timestamp;
+}
+
+TEST(SampleStoreTest, CreateAndPersistToSamplesDirectory) {
+    SampleStore store;
+    EXPECT_EQ(store.persistDirectory(), "jsonData/samples");
+
+    JsonValue sample = SampleStore::makeSample("S-001", "실리콘 웨이퍼-8인치", 0.5, 0.92, 480);
+    store.create(sample);
+
+    const JsonValue* found = store.read("S-001");
+    ASSERT_NE(found, nullptr);
+    EXPECT_EQ(found->at("name").asString(), "실리콘 웨이퍼-8인치");
+    EXPECT_EQ(found->at("stock").asNumber(), 480);
+
+    std::filesystem::path filePath = std::filesystem::path(store.persistDirectory()) / "S-001.json";
+    EXPECT_TRUE(std::filesystem::exists(filePath));
+
+    store.remove("S-001");
+}
+
+TEST(OrderStoreTest, CreateOrderGeneratesFormattedOrderNumberAndPersistsToOrdersDirectory) {
+    OrderStore store;
+    EXPECT_EQ(store.persistDirectory(), "jsonData/orders");
+
+    std::string orderNumber = store.createOrder("S-001", "삼성전자 파운드리", 200);
+
+    static const std::regex pattern(R"(^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-S-001-\d{3}$)");
+    EXPECT_TRUE(std::regex_match(orderNumber, pattern)) << "got: " << orderNumber;
+
+    const JsonValue* found = store.read(orderNumber);
+    ASSERT_NE(found, nullptr);
+    EXPECT_EQ(found->at("sampleId").asString(), "S-001");
+    EXPECT_EQ(found->at("customerName").asString(), "삼성전자 파운드리");
+    EXPECT_EQ(found->at("quantity").asNumber(), 200);
+    EXPECT_EQ(found->at("status").asString(), "RESERVED");
+
+    store.remove(orderNumber);
+}
+
+TEST(OrderStoreTest, SequenceIncrementsPerOrder) {
+    OrderStore store;
+    std::string first = store.createOrder("S-002", "LG이노텍", 100);
+    std::string second = store.createOrder("S-002", "LG이노텍", 50);
+
+    EXPECT_NE(first, second);
+    EXPECT_NE(first.find("-000"), std::string::npos);
+    EXPECT_NE(second.find("-001"), std::string::npos);
+
+    store.remove(first);
+    store.remove(second);
+}
+
+TEST(ProductionQueueStoreTest, FifoOrderIsPreserved) {
+    ProductionQueueStore queue;
+    EXPECT_EQ(queue.persistDirectory(), "jsonData/productionQueue");
+
+    queue.create(ProductionQueueStore::makeQueueItem("ORD-1", "산화막 웨이퍼-SiO2", 150, 0, 190.0, "11:43"));
+    queue.create(ProductionQueueStore::makeQueueItem("ORD-2", "SiC 파워기판-6인치", 200, 30, 165.0, "14:28"));
+    queue.create(ProductionQueueStore::makeQueueItem("ORD-3", "GaN 에피택셜-4인치", 300, 220, 34.0, "15:02"));
+
+    ASSERT_NE(queue.front(), nullptr);
+    EXPECT_EQ(queue.front()->at("orderId").asString(), "ORD-1");
+
+    std::string dequeued;
+    ASSERT_TRUE(queue.dequeue(dequeued));
+    EXPECT_EQ(dequeued, "ORD-1");
+    ASSERT_NE(queue.front(), nullptr);
+    EXPECT_EQ(queue.front()->at("orderId").asString(), "ORD-2");
+
+    ASSERT_TRUE(queue.dequeue(dequeued));
+    EXPECT_EQ(dequeued, "ORD-2");
+    ASSERT_TRUE(queue.dequeue(dequeued));
+    EXPECT_EQ(dequeued, "ORD-3");
+
+    EXPECT_EQ(queue.front(), nullptr);
+    std::string empty;
+    EXPECT_FALSE(queue.dequeue(empty));
 }
 
 int main(int argc, char** argv) {
