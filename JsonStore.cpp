@@ -1,10 +1,25 @@
 #include "JsonStore.h"
 
+#include <filesystem>
 #include <stdexcept>
 
 JsonStore::JsonStore() : records_(JsonValue::makeArray()) {}
 
 JsonStore::JsonStore(JsonValue records) : records_(std::move(records))
+{
+    if (!records_.isArray())
+    {
+        throw std::invalid_argument("JsonStore records must be a JSON array");
+    }
+}
+
+JsonStore::JsonStore(std::string persistDirectory)
+    : records_(JsonValue::makeArray()), persistDirectory_(std::move(persistDirectory))
+{
+}
+
+JsonStore::JsonStore(JsonValue records, std::string persistDirectory)
+    : records_(std::move(records)), persistDirectory_(std::move(persistDirectory))
 {
     if (!records_.isArray())
     {
@@ -45,6 +60,23 @@ int JsonStore::indexOf(const std::string& id) const
     return -1;
 }
 
+std::string JsonStore::persistedFilePath(const std::string& id) const
+{
+    return persistDirectory_ + "/" + id + ".json";
+}
+
+void JsonStore::persistRecord(const std::string& id) const
+{
+    std::filesystem::create_directories(persistDirectory_);
+    read(id)->saveToFile(persistedFilePath(id));
+}
+
+void JsonStore::removePersistedRecord(const std::string& id) const
+{
+    std::error_code ec;
+    std::filesystem::remove(persistedFilePath(id), ec);
+}
+
 void JsonStore::create(const JsonValue& record)
 {
     if (!record.has("id") || !record.at("id").isString())
@@ -59,6 +91,7 @@ void JsonStore::create(const JsonValue& record)
     }
 
     records_.asArray().push_back(record);
+    persistRecord(id);
 }
 
 const JsonValue* JsonStore::read(const std::string& id) const
@@ -81,6 +114,7 @@ bool JsonStore::update(const std::string& id, JsonValue record)
 
     record["id"] = JsonValue(id);
     records_.asArray()[static_cast<size_t>(index)] = std::move(record);
+    persistRecord(id);
     return true;
 }
 
@@ -94,6 +128,7 @@ bool JsonStore::remove(const std::string& id)
 
     auto& array = records_.asArray();
     array.erase(array.begin() + index);
+    removePersistedRecord(id);
     return true;
 }
 

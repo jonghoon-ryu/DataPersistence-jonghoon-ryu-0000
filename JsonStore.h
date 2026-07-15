@@ -6,11 +6,16 @@
 
 // A minimal CRUD store on top of JsonValue. Records are stored as a JSON
 // array of objects; each record must carry a unique string "id" field.
+//
+// Every successful create/update/remove is also persisted as an individual
+// "<id>.json" file under the store's directory (default: "jsonData").
 class JsonStore
 {
 public:
     JsonStore();
     explicit JsonStore(JsonValue records);
+    explicit JsonStore(std::string persistDirectory);
+    JsonStore(JsonValue records, std::string persistDirectory);
 
     static JsonStore parse(const std::string& text);
     static JsonStore loadFromFile(const std::string& path);
@@ -35,9 +40,14 @@ public:
 
     size_t size() const;
     const JsonValue& records() const { return records_; }
+    const std::string& persistDirectory() const { return persistDirectory_; }
 
 private:
     int indexOf(const std::string& id) const;
+    std::string persistedFilePath(const std::string& id) const;
+    void persistRecord(const std::string& id) const;
+    void removePersistedRecord(const std::string& id) const;
 
     JsonValue records_;
+    std::string persistDirectory_ = "jsonData";
 };

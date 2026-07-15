@@ -1,7 +1,11 @@
 #include "gtest/gtest.h"
 
+#include <filesystem>
+#include <regex>
+
 #include "Json.h"
 #include "JsonStore.h"
+#include "TimeUtil.h"
 
 TEST(SampleTest, BasicAssertion) {
     EXPECT_EQ(1 + 1, 2);
@@ -87,6 +91,60 @@ TEST(JsonStoreTest, ParseFromJsonText) {
     ASSERT_NE(first, nullptr);
     EXPECT_EQ(first->at("name").asString(), "Alice");
     EXPECT_EQ(first->at("address").asString(), "Seoul");
+}
+
+TEST(JsonStorePersistenceTest, CreateWritesFileToJsonDataDirectory) {
+    JsonStore store;  // default persist directory: "jsonData"
+    JsonValue record = JsonValue::makeObject();
+    record["id"] = JsonValue("persist-1");
+    record["name"] = JsonValue("Carol");
+
+    store.create(record);
+
+    std::filesystem::path filePath = std::filesystem::path(store.persistDirectory()) / "persist-1.json";
+    EXPECT_EQ(store.persistDirectory(), "jsonData");
+    EXPECT_TRUE(std::filesystem::exists(filePath));
+
+    std::filesystem::remove(filePath);
+}
+
+TEST(JsonStorePersistenceTest, UpdateRewritesPersistedFile) {
+    JsonStore store;
+    JsonValue record = JsonValue::makeObject();
+    record["id"] = JsonValue("persist-2");
+    record["name"] = JsonValue("Carol");
+    store.create(record);
+
+    JsonValue updated = JsonValue::makeObject();
+    updated["name"] = JsonValue("Dave");
+    store.update("persist-2", updated);
+
+    std::filesystem::path filePath = std::filesystem::path(store.persistDirectory()) / "persist-2.json";
+    JsonValue persisted = JsonValue::parseFile(filePath.string());
+    EXPECT_EQ(persisted.at("name").asString(), "Dave");
+
+    std::filesystem::remove(filePath);
+}
+
+TEST(JsonStorePersistenceTest, DeleteRemovesPersistedFile) {
+    JsonStore store;
+    JsonValue record = JsonValue::makeObject();
+    record["id"] = JsonValue("persist-3");
+    store.create(record);
+
+    std::filesystem::path filePath = std::filesystem::path(store.persistDirectory()) / "persist-3.json";
+    ASSERT_TRUE(std::filesystem::exists(filePath));
+
+    store.remove("persist-3");
+
+    EXPECT_FALSE(std::filesystem::exists(filePath));
+}
+
+TEST(TimeUtilTest, ReturnsSecondPrecisionFormattedTimestamp) {
+    std::string timestamp = getCurrentTimestamp();
+
+    static const std::regex pattern(R"(^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$)");
+    EXPECT_TRUE(std::regex_match(timestamp, pattern)) << "got: " << timestamp;
 }
 
 int main(int argc, char** argv) {

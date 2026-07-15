@@ -142,10 +142,12 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Json.cpp" />
     <ClCompile Include="JsonStore.cpp" />
+    <ClCompile Include="TimeUtil.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Json.h" />
     <ClInclude Include="JsonStore.h" />
+    <ClInclude Include="TimeUtil.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
