@@ -140,6 +140,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Json.cpp" />
+    <ClCompile Include="JsonStore.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Json.h" />
+    <ClInclude Include="JsonStore.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
